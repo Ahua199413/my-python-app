@@ -23,6 +23,13 @@ jobs:
         python -m pip install --upgrade pip
         pip install -r requirements.txt
 
+    - name: Lint with flake8
+      run: | # 步驟 4: 執行 flake8 進行程式碼檢查
+      # 如果有語法錯誤或未定義的變數，就停止建置
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # 檢查程式碼風格（警告）
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+
     - name: Test with pytest
-      run: | # 步驟 4: 執行測試！這步失敗，整個流程就會亮紅燈
+      run: | # 步驟 5: 執行測試！這步失敗，整個流程就會亮紅燈
         pytest
