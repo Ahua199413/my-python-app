@@ -1,4 +1,4 @@
-name: Python Docker CI
+name: Python Multi-Platform Docker CI
 
 on:
   push:
@@ -7,41 +7,36 @@ on:
 jobs:
   build-and-push:
     runs-on: ubuntu-latest
-    # 第一步：解決權限問題
     permissions:
       contents: read
       packages: write 
 
     steps:
-      # 第二步：更新套件版本消除 Node.js 警告
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Set up Python
-        uses: actions/setup-python@v5 # 升級到 v5 消除警告
-        with:
-          python-version: '3.10'
+      # 修正警告關鍵 1：安裝模擬器，讓 Linux 能模擬 Mac 的 ARM 架構
+      - name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+
+      # 修正警告關鍵 2：安裝進階版 Docker Build 工具 (Buildx)
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
 
       - name: Log in to GitHub Container Registry
-        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
+      # 修正語法衝突：直接使用官方 Action 處理多平台打包
       - name: Build and Push Image
         uses: docker/build-push-action@v5
         with:
           context: .
           push: true
-          # 同時支援一般伺服器 (amd64) 和 你的 Mac (arm64)
+          # 同時支援一般伺服器 (amd64) 和你的 Mac (arm64)
           platforms: linux/amd64,linux/arm64 
-          tags: ghcr.io/ahua199413/my-python-app:latest
-        run: |
-          # 1. 取得倉庫名稱並轉為小寫 (解決 Docker 命名限制)
-          IMAGE_ID=ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
-          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
-          
-          echo "目標倉庫: $IMAGE_ID"
-          
-          # 2. 建立映像檔
-          docker build -t $IMAGE_ID:latest .
-          
-          # 3. 強制推送到 GitHub Packages
-          docker push $IMAGE_ID:latest
+          # 這裡會自動幫你處理大小寫
+          tags: ghcr.io/${{ github.repository_owner }}/my-python-app:latest
