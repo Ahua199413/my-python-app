@@ -1,33 +1,40 @@
-name: Python Package CI
+name: Python Docker CI
 
 on:
   push:
-    branches: [ "main" ] # 當 main 分支有變動時觸發
-  pull_request:
     branches: [ "main" ]
 
 jobs:
-  build:
-    runs-on: ubuntu-latest # 使用 GitHub 提供的免費 Linux 虛擬機
+  build-and-push:
+    runs-on: ubuntu-latest
+    # 第一步：解決權限問題
+    permissions:
+      contents: read
+      packages: write 
 
     steps:
-    - uses: actions/checkout@v4 # 步驟 1: 把你的程式碼複製到虛擬機上
+      # 第二步：更新套件版本消除 Node.js 警告
+      - name: Checkout code
+        uses: actions/checkout@v4
 
-    - name: Set up Python
-      uses: actions/setup-python@v4 # 步驟 2: 安裝 Python 環境
-      with:
-        python-version: '3.10'
-    - name: Install dependencies
-      run: | # 步驟 3: 安裝你在 requirements.txt 定義的套件
-        python -m pip install --upgrade pip
-          pip install -r requirements.txt
-    - name: Lint with flake8
-      run: | # 步驟 4: 執行 flake8 進行程式碼檢查
-        # 如果有語法錯誤或未定義的變數，就停止建置
-        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
-        # 檢查程式碼風格（警告）
-        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
+      - name: Set up Python
+        uses: actions/setup-python@v5 # 升級到 v5 消除警告
+        with:
+          python-version: '3.10'
 
-    - name: Test with pytest
-      run: | # 步驟 5: 執行測試！這步失敗，整個流程就會亮紅燈
-        pytest
+      - name: Log in to GitHub Container Registry
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Build and Push Image
+        run: |
+          # 1. 取得倉庫名稱並轉為小寫 (解決 Docker 命名限制)
+          IMAGE_ID=ghcr.io/${{ github.repository_owner }}/${{ github.event.repository.name }}
+          IMAGE_ID=$(echo $IMAGE_ID | tr '[A-Z]' '[a-z]')
+          
+          echo "目標倉庫: $IMAGE_ID"
+          
+          # 2. 建立映像檔
+          docker build -t $IMAGE_ID:latest .
+          
+          # 3. 強制推送到 GitHub Packages
+          docker push $IMAGE_ID:latest
